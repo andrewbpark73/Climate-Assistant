@@ -1,0 +1,40 @@
+{
+  "name": "climate-assistant",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "clean": "rimraf src/.observablehq/cache",
+    "build": "observable build",
+    "dev": "observable preview",
+    "deploy": "observable deploy",
+    "observable": "observable",
+    "load": "NODE_OPTIONS='--loader ts-node/esm' ts-node src/data/airtableLoader.ts",
+    "process": "NODE_OPTIONS='--loader ts-node/esm' ts-node src/data/airtable_data_cleaning.ts",
+    "load-and-process": "npm run load && npm run process"
+  },
+  "dependencies": {
+    "@observablehq/framework": "^1.7.0",
+    "@observablehq/inputs": "^0.12.0",
+    "@observablehq/plot": "^0.6.17",
+    "@observablehq/runtime": "^6.0.0",
+    "@observablehq/stdlib": "^5.8.8",
+    "airtable": "^0.12.2",
+    "csv-parser": "^3.2.0",
+    "csv-stringify": "^6.4.5",
+    "d3": "^7.9.0",
+    "d3-fetch": "^3.0.1",
+    "d3-time": "^3.1.0",
+    "d3-time-format": "^4.1.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.8",
+    "rimraf": "^5.0.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}
