@@ -4,16 +4,15 @@ theme: dashboard
 
 # Climate Solutions Dashboard
 
-&nbsp;
-
-## Show me
-
 ```js
 import * as Inputs from "@observablehq/inputs";
 import {FileAttachment} from "@observablehq/stdlib";
 import {Runtime, Inspector} from "@observablehq/runtime";
 import {revive} from "./components/revive.js";
 import {trend} from "./components/trend.js";
+import {ZoomableSunburst, transformDataForSunburst} from "./components/zoomableSunburst.js";
+import {ZoomableIcicle, transformDataForIcicle} from "./components/zoomableIcicle.js";
+import {CollapsibleTree, transformDataForTree} from "./components/collapsibleTree.js";
 
 // Create a runtime and inspector
 const runtime = new Runtime();
@@ -29,33 +28,57 @@ const subcategories_label = await FileAttachment(".observablehq/cache/data/subca
 const solutions = await FileAttachment(".observablehq/cache/data/solutions.csv").csv({typed: true});
 const solutionMetadata = await FileAttachment(".observablehq/cache/data/solution_metadata.csv").csv({typed: true});
 const geoHazards = await FileAttachment(".observablehq/cache/data/geo_hazard.csv").csv({typed: true});
+
+// Log data to console for debugging
+console.log("Categories:", categories_label);
+console.log("Subcategories:", subcategories_label);
+console.log("Solutions:", solutions);
 ```
 
 ```js
-// Process the data as needed
-// Add your data processing logic here
+// Process the data for visualizations
+try {
+  // Transform data for each visualization
+  const sunburstData = transformDataForSunburst(categories_label, subcategories_label, solutions);
+  const icicleData = transformDataForIcicle(categories_label, subcategories_label, solutions);
+  const treeData = transformDataForTree(categories_label, subcategories_label, solutions);
+  
+  // Log transformed data for debugging
+  console.log("Tree Data:", treeData);
+  console.log("Sunburst Data:", sunburstData);
+  console.log("Icicle Data:", icicleData);
+} catch (error) {
+  console.error("Error transforming data:", error);
+}
 ```
 
 ```js
-// Radio button input to choose market segment
+// Get category options from your data
 const categoryOptions = ["All"].concat(categories_label.map((d) => d["Category Name"]));
+
+// Create form with checkboxes instead of radio buttons for multiple selection
 const form = Inputs.form({
-  category: Inputs.radio(categoryOptions, {
-    label: "Hazard Category:",
-    value: "All"
+  category: Inputs.checkbox(categoryOptions, {
+    label: "Hazard Categories:",
+    value: ["All"] // Default selection is "All"
   })
 });
 
+// Track selected categories
+let selectedCategories = form.value.categories;
+
 let selectedCategory = form.value.category;
-const categoryDisplay = html`<div>Selected Category: ${selectedCategory}</div>`;
+const categoryDisplay = html`<div>${selectedCategory} Hazards</div>`;
 
 form.addEventListener('input', () => {
   selectedCategory = form.value.category;
-  categoryDisplay.textContent = `Selected Category: ${selectedCategory}`;
+  categoryDisplay.textContent = `${selectedCategory} Hazards`;
 });
 ```
 
 ${form}
+
+# Show me
 
 ${categoryDisplay}
 
@@ -74,6 +97,57 @@ ${categoryDisplay}
     <h2>Solutions</h2>
     <span class="big">${solutions.length}</span>
     <span class="muted">total solutions</span>
+  </div>
+</div>
+
+## Hierarchical Visualizations
+
+<div class="grid">
+  <div class="card" style="padding: 20px; overflow: visible;">
+    <h2>Collapsible Tree</h2>
+    <p>Click on nodes to expand or collapse branches. Initially shows only the first level.</p>
+    ${resize((width) => {
+      try {
+        const treeData = transformDataForTree(categories_label, subcategories_label, solutions);
+        return CollapsibleTree(treeData, {
+          width: Math.max(width, 1200), 
+          height: 600,
+          margin: {top: 60, right: 120, bottom: 40, left: 80}
+        });
+      } catch (error) {
+        return html`<div class="error">Error rendering tree: ${error.message}</div>`;
+      }
+    })}
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card" style="min-height: 650px; padding-top: 30px;">
+    <h2>Zoomable Sunburst</h2>
+    <p>Click on segments to zoom in, click in the center to zoom out</p>
+    ${resize((width) => {
+      try {
+        const sunburstData = transformDataForSunburst(categories_label, subcategories_label, solutions);
+        return ZoomableSunburst(sunburstData, {width: width, height: 600});
+      } catch (error) {
+        return html`<div class="error">Error rendering sunburst: ${error.message}</div>`;
+      }
+    })}
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card" style="min-height: 550px; padding-top: 30px;">
+    <h2>Zoomable Icicle</h2>
+    <p>Click on rectangles to zoom in, use the Reset button to zoom out</p>
+    ${resize((width) => {
+      try {
+        const icicleData = transformDataForIcicle(categories_label, subcategories_label, solutions);
+        return ZoomableIcicle(icicleData, {width: width, height: 500});
+      } catch (error) {
+        return html`<div class="error">Error rendering icicle: ${error.message}</div>`;
+      }
+    })}
   </div>
 </div>
 
@@ -135,6 +209,7 @@ const x = {domain: [start, end]};
       annotations: versions.filter((d) => !/-/.test(d.version)).map((d) => ({date: d.date, text: d.version, href: `https://github.com/observablehq/plot/releases/v${d.version}`}))
     })
   )}
+  
 </div>
 
 <div class="card">
