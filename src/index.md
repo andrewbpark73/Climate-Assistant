@@ -103,21 +103,25 @@ ${categoryDisplay}
 ## Hierarchical Visualizations
 
 <div class="grid">
-  <div class="card" style="padding: 20px; overflow: visible;">
-    <h2>Collapsible Tree</h2>
-    <p>Click on nodes to expand or collapse branches. Initially shows only the first level.</p>
-    ${resize((width) => {
-      try {
-        const treeData = transformDataForTree(categories_label, subcategories_label, solutions);
-        return CollapsibleTree(treeData, {
-          width: Math.max(width, 1200), 
-          height: 600,
-          margin: {top: 60, right: 120, bottom: 40, left: 80}
-        });
-      } catch (error) {
-        return html`<div class="error">Error rendering tree: ${error.message}</div>`;
-      }
-    })}
+  <div class="card" style="padding: 0; overflow: auto; max-height: 700px; margin-bottom: 20px;">
+    <div style="padding: 20px 20px 10px 20px;">
+      <h2>Collapsible Tree</h2>
+      <p>Click on nodes to expand or collapse branches. Initially shows only the first level.</p>
+    </div>
+    <div style="width: 100%;">
+      ${resize((width) => {
+        try {
+          const treeData = transformDataForTree(categories_label, subcategories_label, solutions);
+          return CollapsibleTree(treeData, {
+            width: Math.max(width, 1200), 
+            height: 600,
+            margin: {top: 30, right: 120, bottom: 20, left: 80}
+          });
+        } catch (error) {
+          return html`<div class="error">Error rendering tree: ${error.message}</div>`;
+        }
+      })}
+    </div>
   </div>
 </div>
 

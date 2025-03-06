@@ -36,13 +36,16 @@ export function CollapsibleTree(data, {
     .style("width", "100%")
     .style("height", "auto")
     .style("transition", "height 0.3s ease-in-out")
-    .style("padding", "10px 0"); // Add some padding to the container
+    .style("padding", "0")
+    .style("overflow", "auto") // Enable both horizontal and vertical scrolling
+    .style("position", "relative");
   
   const svg = container.append("svg")
     .attr("width", width)
     .attr("height", height)
     .attr("viewBox", [0, 0, width, height])
-    .attr("style", "max-width: 100%; height: auto; font: 14px sans-serif; color: white;");
+    .attr("style", "max-width: none; height: auto; font: 14px sans-serif; color: white;") // Remove max-width constraint
+    .style("display", "block");
   
   // Add a group for the content that we'll transform to center
   const g = svg.append("g");
@@ -60,11 +63,40 @@ export function CollapsibleTree(data, {
   
   // Set up the tree layout with more spacing
   const treeLayout = d3.tree()
-    .nodeSize([40, 250]) // Decreased vertical spacing, reduced horizontal spacing
-    .separation((a, b) => (a.parent === b.parent ? 1.3 : 2.0)); // Increased vertical separation
+    .nodeSize([40, 250])
+    .separation((a, b) => (a.parent === b.parent ? 1.3 : 2.0));
+
+  // Flag to prevent multiple updates from happening simultaneously
+  let isUpdating = false;
+
+  // Helper function to find the scrollable parent element
+  function findScrollableParent(node) {
+    if (node == null) {
+      return null;
+    }
+    
+    // Check if the node is the body or html element
+    if (node === document.body || node === document.documentElement) {
+      return window;
+    }
+    
+    // Check if the node has scrolling
+    const overflowY = window.getComputedStyle(node).overflowY;
+    const isScrollable = overflowY !== 'visible' && overflowY !== 'hidden';
+    
+    if (isScrollable && node.scrollHeight > node.clientHeight) {
+      return node;
+    }
+    
+    return findScrollableParent(node.parentNode);
+  }
   
   // Function to update the tree visualization
   function update(source) {
+    // Prevent multiple simultaneous updates
+    if (isUpdating) return;
+    isUpdating = true;
+    
     const duration = 400; // Animation duration in milliseconds
     
     // Apply the tree layout to the hierarchy
@@ -76,9 +108,9 @@ export function CollapsibleTree(data, {
     
     // Normalize for fixed-depth with increased spacing
     nodes.forEach(d => {
-      d.y = d.depth * 275; // Reduced horizontal spacing between levels
+      d.y = d.depth * 275;
       if (d.depth === 0) {
-        d.y += 60; // Keep the root node position
+        d.y += 60;
       }
     });
     
@@ -91,21 +123,35 @@ export function CollapsibleTree(data, {
       maxY = Math.max(maxY, d.y);
     });
     
-    // Calculate required height and width with better padding
-    const treeHeight = maxX - minX + margin.top + margin.bottom + 40;
-    const treeWidth = maxY - minY + margin.left + margin.right;
+    // Calculate required height and width with adequate padding
+    const treeHeight = maxX - minX + 120;
+    const treeWidth = maxY - minY + margin.left + margin.right + 60;
     
-    // Position the tree with proper vertical centering and left alignment
-    g.attr("transform", `translate(${margin.left - 20}, ${margin.top - minX + 20})`);
+    // Center the tree vertically within the container
+    const centerY = margin.top + (height - treeHeight) / 2;
+    const actualCenterY = centerY > margin.top ? centerY : margin.top - minX + 40;
     
-    // Update the SVG dimensions
+    // Position the tree with proper vertical centering
+    g.attr("transform", `translate(${margin.left}, ${actualCenterY})`);
+    
+    // Update the SVG dimensions to match tree size
+    const actualHeight = Math.max(treeHeight + 80, 400);
+    const actualWidth = Math.max(width, treeWidth);
+    
     svg.transition()
       .duration(duration)
-      .attr("height", treeHeight)
-      .attr("viewBox", [0, 0, Math.max(width, treeWidth), treeHeight]);
+      .attr("height", actualHeight)
+      .attr("width", actualWidth)
+      .attr("viewBox", [0, 0, actualWidth, actualHeight]);
     
-    // Update container height
-    container.style("height", `${treeHeight}px`);
+    // Update container height to match SVG
+    container.transition()
+      .duration(duration)
+      .style("height", `${actualHeight}px`)
+      .on("end", function() {
+        // Re-enable updates after transition completes
+        isUpdating = false;
+      });
     
     // Update the nodes
     const node = gNode.selectAll("g")
@@ -116,7 +162,13 @@ export function CollapsibleTree(data, {
       .attr("transform", d => `translate(${source.y0},${source.x0})`)
       .attr("fill-opacity", 0)
       .attr("stroke-opacity", 0)
-      .on("click", (event, d) => {
+      .on("click", function(event, d) {
+        // Prevent click from propagating
+        event.stopPropagation();
+        
+        // Store the node for scrolling
+        const clickedNode = this;
+        
         // Toggle children on click
         if (d.children) {
           d._children = d.children;
@@ -124,13 +176,46 @@ export function CollapsibleTree(data, {
         } else if (d._children) {
           d.children = d._children;
           d._children = null;
+        } else {
+          return; // No children to toggle, don't update
         }
+        
+        // Update the tree
         update(d);
+        
+        // After update completes and animation, scroll to clicked node
+        setTimeout(() => {
+          // First try the container itself for scrolling
+          const scrollableParent = container.node();
+          
+          if (scrollableParent) {
+            // Get coordinates for clicked node
+            const nodeRect = clickedNode.getBoundingClientRect();
+            const containerRect = scrollableParent.getBoundingClientRect();
+            
+            // Calculate how far to scroll to center the node
+            const nodeCenter = nodeRect.top + (nodeRect.height / 2);
+            const containerCenter = containerRect.top + (containerRect.height / 2);
+            const scrollOffsetY = nodeCenter - containerCenter;
+            
+            // Calculate horizontal scroll position
+            const nodeCenterX = nodeRect.left + (nodeRect.width / 2);
+            const containerCenterX = containerRect.left + (containerRect.width / 2);
+            const scrollOffsetX = nodeCenterX - containerCenterX;
+            
+            // Perform the scroll
+            scrollableParent.scrollBy({
+              top: scrollOffsetY,
+              left: scrollOffsetX,
+              behavior: 'smooth'
+            });
+          }
+        }, duration + 50);
       });
     
     // Add circles to the nodes
     nodeEnter.append("circle")
-      .attr("r", 0) // Start with radius 0 for animation
+      .attr("r", 0)
       .attr("fill", d => d._children ? "#555" : (d.children ? nodeFill : "#999"))
       .attr("stroke", nodeStroke)
       .attr("stroke-width", nodeStrokeWidth);
@@ -138,7 +223,7 @@ export function CollapsibleTree(data, {
     // Add labels to the nodes with improved positioning
     nodeEnter.append("text")
       .attr("dy", "0.31em")
-      .attr("x", d => d.children || d._children ? -14 : 14) // Slightly increased text offset
+      .attr("x", d => d.children || d._children ? -14 : 14)
       .attr("text-anchor", d => d.children || d._children ? "end" : "start")
       .each(function(d) {
         // Get the node name
@@ -159,8 +244,8 @@ export function CollapsibleTree(data, {
           // Second line (add a new text element)
           d3.select(this.parentNode)
             .append("text")
-            .attr("dy", "1.6em") // Slightly increased spacing between lines
-            .attr("x", d => d.children || d._children ? -16 : 16) // Match the first line offset
+            .attr("dy", "1.6em")
+            .attr("x", d => d.children || d._children ? -16 : 16)
             .attr("text-anchor", d => d.children || d._children ? "end" : "start")
             .text(secondLine)
             .attr("fill", "white")
@@ -173,7 +258,7 @@ export function CollapsibleTree(data, {
             .attr("fill", "white");
         }
       })
-      .attr("fill-opacity", 0); // Start with opacity 0 for animation
+      .attr("fill-opacity", 0);
     
     // Transition nodes to their new position
     const nodeUpdate = nodeEnter.merge(node)
@@ -264,6 +349,8 @@ export function CollapsibleTree(data, {
   
   // Initial update
   update(root);
+  
+  // Don't add a window resize listener - these can cause issues when combined with other events
   
   return container.node();
 }
@@ -428,4 +515,4 @@ export function transformDataForTree(categories, subcategories, solutions) {
   filterEmptyNodes(root);
   
   return root;
-} 
+}
